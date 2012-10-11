@@ -1,0 +1,117 @@
+#!/bin/bash
+#
+# ODB	
+#
+# chkconfig: 2345 96 04
+# description: ODB init
+#
+# pidfile: /var/run/odb/odb.pid
+
+### BEGIN INIT INFO
+# Provides: odb
+# Required-Start: $local_fs $network $syslog
+# Required-Stop: $local_fs $syslog
+# Should-Start: $syslog
+# Should-Stop: $network $syslog
+# Default-Start: 3 4 5
+# Default-Stop: 0 2 1 6
+# Short-Description: ODB
+# Description: odb webapp
+### END INIT INFO
+
+# Source function library.
+. /etc/init.d/functions
+
+prog="ODB"
+mkdir -p /var/run/odb/
+pidfile=/var/run/odb/odb.pid
+lckfile=/var/lock/subsys/odb-lock
+binfile=/usr/share/odb/odb-start.sh
+
+start() {
+	if [ -f "$pidfile" ]; then
+		pid=`cat $pidfile`
+		checkpid $pid
+		r=$?
+		if [ "$r" -eq 0 ]; then
+			cmd=$(basename $binfile)
+			echo -n "$cmd is already running (pid $pid)"; passed
+			echo
+			exit 0
+		fi
+	fi
+	echo -n "Starting $prog: "
+	cd /usr/share/odb
+
+    JAVA_CMD="java -jar odb-1.0-SNAPSHOT.jar"
+    nohup $JAVA_CMD > /dev/null 2>&1 &
+    HISPID=$!
+    echo $HISPID > $pidfile
+
+    sleep 5
+	if [ -f "$pidfile" ]; then
+		checkpid `cat $pidfile`
+		r=$?
+		if [ "$r" -eq 0 ]; then
+			touch $lckfile
+			success
+		else
+			failure
+		fi
+	else
+		failure
+	fi
+	echo
+	return
+}	
+
+stop() {
+	echo -n "Stopping $prog: "
+	if [ -n "`pidofproc -p $pidfile $binfile`" ] ; then
+		killproc -p $pidfile $binfile
+	else
+		failure $"Stopping $prog"
+	fi
+	retval=$?
+	[ $retval -eq 0 ] && rm -f $lckfile
+	echo
+	return $retval
+}
+
+rh_status() {
+	status -p $pidfile $binfile
+}
+
+restart() {
+	stop
+	start
+}
+
+case "$1" in
+    start)
+	start
+	;;
+    stop)
+	stop
+	;;
+    status)
+	rh_status
+	retval=$?
+	if [ $retval -eq 3 -a -f $lckfile ] ; then
+		retval=2
+	fi
+	;;
+    restart)
+	restart
+	;;
+    condrestart)
+	if [ -n "`pidofproc -p $pidfile $binfile`" ] ; then
+		restart
+	fi
+	;;
+    *)
+	echo "Usage: service odb {start|stop|status|restart|condrestart}"
+	exit 1
+	;;
+esac
+exit $?
